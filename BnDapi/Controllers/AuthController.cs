@@ -1,8 +1,10 @@
 ﻿using BnDapi.Data;
 using BnDapi.Dto;
 using BnDapi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -21,12 +23,11 @@ namespace BnDapi.Controllers
         public AuthController(IConfiguration configuration, DataContext context)
         {
             _configuration = configuration;
-
             _context = context;
         }
 
 
-        [HttpPost("register")]
+        [HttpPost("register"), Authorize(Roles = "Admin")]
         public async Task<ActionResult<User>> Register(UserDTO request)
         {
             CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
