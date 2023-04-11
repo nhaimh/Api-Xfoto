@@ -1,6 +1,7 @@
 ﻿using BnDapi.Data;
 using BnDapi.Dto;
 using BnDapi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -47,14 +48,14 @@ namespace BnDapi.Controllers
             return blog;
         }
 
-        [HttpPost("DuAnImage")]
+        [HttpPost("DuAnImage"), Authorize(Roles = "Admin")]
         public async Task<ActionResult<List<DuAnImgae>>> CreateImage(DuAnImgae duAnImgae)
         {
             _context.DuAnImgae.Add(duAnImgae);
             await _context.SaveChangesAsync();
             return Ok(duAnImgae);
         }
-        [HttpDelete("DuAnImage/id")]
+        [HttpDelete("DuAnImage/id"), Authorize(Roles = "Admin")]
         public async Task<ActionResult<List<DuAnImgae>>> DeleteImgae(int id)
         {
             var blog = await _context.DuAnImgae.FindAsync(id);
@@ -62,7 +63,7 @@ namespace BnDapi.Controllers
             await _context.SaveChangesAsync();
             return Ok("Remove success");
         }
-        [HttpPut("DuAnImage")]
+        [HttpPut("DuAnImage"), Authorize(Roles = "Admin")]
         public async Task<ActionResult<List<DuAnImgae>>> UpdateImage([FromBody] DuAnImgae request)
         {
             var imgae = await _context.DuAnImgae.FindAsync(request.Id);
