@@ -3,6 +3,7 @@ using BnDapi.Dto;
 using BnDapi.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
@@ -35,7 +36,8 @@ namespace BnDapi.Controllers
             user.Username = request.UserName;
             user.PasswordHash = passwordHash;
             user.PasswordSalt = passwordSalt;
-
+            user.TokenCreated = DateTime.Now;
+            user.TokenExpires = user.TokenCreated.AddMinutes(60);
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
             return Ok(user);
@@ -62,7 +64,20 @@ namespace BnDapi.Controllers
             return Ok(token);
         }
 
-
+        [HttpGet]
+        public async Task<ActionResult<List<User>>> GetAll()
+        {
+            var users = await _context.Users.ToListAsync();
+            return users;
+        }
+        [HttpDelete,Authorize(Roles = "Admin")]
+        public async Task<ActionResult<List<User>>> DeleteUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return Ok("Remove success");
+        }
         [HttpPost("refresh-token")]
         public async Task<ActionResult<string>> RefreshToken()
         {
