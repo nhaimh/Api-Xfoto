@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.NetworkInformation;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -64,13 +65,23 @@ namespace BnDapi.Controllers
             return Ok(token);
         }
 
-        [HttpGet]
-        public async Task<ActionResult<List<User>>> GetAll()
+        [HttpPost]
+        public async Task<ActionResult<PagingResult<User>>> GetAll(UserPaging paging)
         {
-            var users = await _context.Users.ToListAsync();
-            return users;
+            PagingResult<User> result = new();
+            var query = _context.Users.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.Username.Contains(paging.KeyWord))); // Query ra những row phù hợp điều kiện
+            result.TotalRows = query.Count(); // Đếm tổng row phù hợp
+            result.Data = query.Skip(paging.pageSize * (paging.pageIndex - 1)).Take(paging.pageSize).ToList(); // Lấy row theo paging
+            return Ok(result);
         }
-        [HttpDelete,Authorize(Roles = "Admin")]
+        [HttpGet]
+        public async Task<ActionResult<User>> GetById(int id)
+        {
+            var use = await _context.Users.Where(c => c.Id == id).SingleAsync();
+            return use;
+
+        }
+        [HttpDelete("id"), Authorize(Roles = "Admin")]
         public async Task<ActionResult<List<User>>> DeleteUser(int id)
         {
             var user = await _context.Users.FindAsync(id);

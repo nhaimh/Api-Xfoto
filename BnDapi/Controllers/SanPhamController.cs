@@ -37,7 +37,7 @@ namespace BnDapi.Controllers
         public async Task<ActionResult<PagingResult<SanPhamImage>>> GetSPdetail(SanPhamPaging paging)
         {
             PagingResult<SanPhamImage> result = new();
-            var query = _context.SanPhamImage.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.ImageA.Contains(paging.KeyWord))); // Query ra những row phù hợp điều kiện
+            var query = _context.SanPhamImage.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.Description.Contains(paging.KeyWord))); // Query ra những row phù hợp điều kiện
             result.TotalRows = query.Count(); // Đếm tổng row phù hợp
             result.Data = query.Skip(paging.pageSize * (paging.pageIndex - 1)).Take(paging.pageSize).ToList(); // Lấy row theo paging
             return Ok(result);
