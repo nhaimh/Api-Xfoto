@@ -65,7 +65,7 @@ namespace BnDapi.Controllers
             return Ok(token);
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Roles = "Admin")]
         public async Task<ActionResult<PagingResult<User>>> GetAll(UserPaging paging)
         {
             PagingResult<User> result = new();
@@ -74,7 +74,7 @@ namespace BnDapi.Controllers
             result.Data = query.Skip(paging.pageSize * (paging.pageIndex - 1)).Take(paging.pageSize).ToList(); // Lấy row theo paging
             return Ok(result);
         }
-        [HttpGet]
+        [HttpGet,Authorize(Roles = "Admin")]
         public async Task<ActionResult<User>> GetById(int id)
         {
             var use = await _context.Users.Where(c => c.Id == id).SingleAsync();
@@ -88,6 +88,24 @@ namespace BnDapi.Controllers
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
             return Ok("Remove success");
+        }
+        [HttpPut, Authorize(Roles = "Admin")]
+        public async Task<ActionResult<List<User>>> UpdateImage([FromBody] User request)
+        {
+            var user = await _context.Users.FindAsync(request.Id);
+
+            user.Username = request.Username;
+            user.Fullname = request.Fullname;
+            user.Email = request.Email;
+            user.Address = request.Address;
+            user.Role = request.Role;
+            user.PasswordHash = user.PasswordHash;
+            user.PasswordSalt = user.PasswordSalt;
+            user.TokenCreated = DateTime.UtcNow;
+            user.TokenExpires = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+            return Ok(user);
         }
         [HttpPost("refresh-token")]
         public async Task<ActionResult<string>> RefreshToken()
