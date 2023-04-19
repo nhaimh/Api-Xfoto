@@ -22,7 +22,6 @@
     }
     public class UserPaging : Paging
     {
-
         public int Status { get; set; }
         public string KeyWord { get; set; }
     }

@@ -1,192 +1,304 @@
 ﻿using BnDapi.Data;
-using BnDapi.Dto;
 using BnDapi.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
-using System.Net.NetworkInformation;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Linq;
+using BnDapi.Dto;
 
 namespace BnDapi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthenticateController : ControllerBase
     {
-        public static User user = new User();
+        private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
-        private readonly DataContext _context;
 
-        public AuthController(IConfiguration configuration, DataContext context)
+        public AuthenticateController(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
         {
+            _userManager = userManager;
+            _roleManager = roleManager;
             _configuration = configuration;
-            _context = context;
         }
 
-
-        [HttpPost("register"), Authorize(Roles = "Admin")]
-        public async Task<ActionResult<User>> Register(UserDTO request)
+        [HttpPost]
+        [Route("login")]
+        public async Task<IActionResult> Login([FromBody] SignInModel model)
         {
-            CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
+            var user = await _userManager.FindByNameAsync(model.Email);
+            if (user != null && await _userManager.CheckPasswordAsync(user, model.Password))
+            {
+                var userRoles = await _userManager.GetRolesAsync(user);
 
-            user.Username = request.UserName;
-            user.PasswordHash = passwordHash;
-            user.PasswordSalt = passwordSalt;
-            user.TokenCreated = DateTime.Now;
-            user.TokenExpires = user.TokenCreated.AddMinutes(60);
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-            return Ok(user);
+                var authClaims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, model.Email),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                };
+
+                foreach (var userRole in userRoles)
+                {
+                    authClaims.Add(new Claim(ClaimTypes.Role, userRole));
+                }
+
+                var token = CreateToken(authClaims);
+                var refreshToken = GenerateRefreshToken();
+
+                _ = int.TryParse(_configuration["JWT:RefreshTokenValidityInDays"], out int refreshTokenValidityInDays);
+
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiryTime = DateTime.Now.AddDays(refreshTokenValidityInDays);
+
+                await _userManager.UpdateAsync(user);
+
+                return Ok(new
+                {
+                    Token = new JwtSecurityTokenHandler().WriteToken(token),
+                    RefreshToken = refreshToken,
+                    Expiration = token.ValidTo
+                });
+            }
+            return Unauthorized();
         }
-        [HttpPost("login")]
-        public async Task<ActionResult<string>> Login(UserDTO request)
+
+        [HttpPost]
+        [Route("SignUp") ,Authorize(Roles = "User")]
+        public async Task<IActionResult> Register([FromBody] SignUpModel model)
         {
-            var user = _context.Users.FirstOrDefault(x => x.Username == request.UserName);
+            var userExists = await _userManager.FindByNameAsync(model.Email);
+            if (userExists != null)
+                return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User already exists!" });
+
+            AppUser user = new()
+            {
+                FullName = model.FullName,
+                Email = model.Email,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                UserName = model.Email
+            };
+            var result = await _userManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User creation failed! Please check user details and try again." });
+
+            return Ok(new Response { Status = "Success", Message = "User created successfully!" });
+        }
+
+        [HttpPost]
+        [Route("SignUp-admin"), Authorize(Roles = "Admin")]
+        public async Task<IActionResult> RegisterAdmin([FromBody] SignUpModel model)
+        {
+            var userExists = await _userManager.FindByNameAsync(model.Email);
+            if (userExists != null)
+                return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User already exists!" });
+
+            AppUser user = new()
+            {
+                FullName = model.FullName,
+                Email = model.Email,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                UserName = model.Email
+            };
+            var result = await _userManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+                return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User creation failed! Please check user details and try again." });
+
+            if (!await _roleManager.RoleExistsAsync(UserRoles.Admin))
+                await _roleManager.CreateAsync(new IdentityRole(UserRoles.Admin));
+            if (!await _roleManager.RoleExistsAsync(UserRoles.User))
+                await _roleManager.CreateAsync(new IdentityRole(UserRoles.User));
+
+            if (await _roleManager.RoleExistsAsync(UserRoles.Admin))
+            {
+                await _userManager.AddToRoleAsync(user, UserRoles.Admin);
+            }
+            if (await _roleManager.RoleExistsAsync(UserRoles.Admin))
+            {
+                await _userManager.AddToRoleAsync(user, UserRoles.User);
+            }
+            return Ok(new Response { Status = "Success", Message = "User created successfully!" });
+        }
+
+        [HttpPost]
+        [Route("refresh-token")]
+        public async Task<IActionResult> RefreshToken(TokenModel tokenModel)
+        {
+            if (tokenModel is null)
+            {
+                return BadRequest("Invalid client request");
+            }
+
+            string? accessToken = tokenModel.AccessToken;
+            string? refreshToken = tokenModel.RefreshToken;
+
+            var principal = GetPrincipalFromExpiredToken(accessToken);
+            if (principal == null)
+            {
+                return BadRequest("Invalid access token or refresh token");
+            }
+
+#pragma warning disable CS8600 // Converting null literal or possible null value to non-nullable type.
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+            string username = principal.Identity.Name;
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
+#pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.
+
+            var user = await _userManager.FindByNameAsync(username);
+
+            if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
+            {
+                return BadRequest("Invalid access token or refresh token");
+            }
+
+            var newAccessToken = CreateToken(principal.Claims.ToList());
+            var newRefreshToken = GenerateRefreshToken();
+
+            user.RefreshToken = newRefreshToken;
+            await _userManager.UpdateAsync(user);
+
+            return new ObjectResult(new
+            {
+                accessToken = new JwtSecurityTokenHandler().WriteToken(newAccessToken),
+                refreshToken = newRefreshToken
+            });
+        }
+        [HttpPost ,Authorize]
+        public async Task<IActionResult> GetAll(UserPaging paging)
+        {
+            var users = await _userManager.Users.ToListAsync();
+            users = users.OrderBy(o => o.Id).Skip((paging.pageIndex - 1) * paging.pageSize).Take(paging.pageSize).ToList();
+            return Ok(users);
+        }
+        [HttpDelete("{id}"), Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Delete(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
             if (user == null)
             {
-                return BadRequest("User not found.");
+                return NotFound();
             }
 
-            if (!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+            var result = await _userManager.DeleteAsync(user);
+            if (result.Succeeded)
             {
-                return BadRequest("Wrong password.");
+                return Ok("Succes");
             }
 
-            string token = CreateToken(user);
-
-            var refreshToken = GenerateRefreshToken();
-            SetRefreshToken(refreshToken);
-
-            return Ok(token);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "Error deleting the user");
         }
-
-        [HttpPost, Authorize(Roles = "Admin")]
-        public async Task<ActionResult<PagingResult<User>>> GetAll(UserPaging paging)
+        [HttpGet("{id}"), Authorize]
+        public async Task<IActionResult> GetById(string id)
         {
-            PagingResult<User> result = new();
-            var query = _context.Users.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.Username.Contains(paging.KeyWord))); // Query ra những row phù hợp điều kiện
-            result.TotalRows = query.Count(); // Đếm tổng row phù hợp
-            result.Data = query.Skip(paging.pageSize * (paging.pageIndex - 1)).Take(paging.pageSize).ToList(); // Lấy row theo paging
-            return Ok(result);
-        }
-        [HttpGet,Authorize(Roles = "Admin")]
-        public async Task<ActionResult<User>> GetById(int id)
-        {
-            var use = await _context.Users.Where(c => c.Id == id).SingleAsync();
-            return use;
-
-        }
-        [HttpDelete("id"), Authorize(Roles = "Admin")]
-        public async Task<ActionResult<List<User>>> DeleteUser(int id)
-        {
-            var user = await _context.Users.FindAsync(id);
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-            return Ok("Remove success");
-        }
-        [HttpPut, Authorize(Roles = "Admin")]
-        public async Task<ActionResult<List<User>>> UpdateImage([FromBody] User request)
-        {
-            var user = await _context.Users.FindAsync(request.Id);
-
-            user.Username = request.Username;
-            user.Fullname = request.Fullname;
-            user.Email = request.Email;
-            user.Address = request.Address;
-            user.Role = request.Role;
-            user.PasswordHash = user.PasswordHash;
-            user.PasswordSalt = user.PasswordSalt;
-            user.TokenCreated = DateTime.UtcNow;
-            user.TokenExpires = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
+            var user = await _userManager.FindByIdAsync(id);
 
             return Ok(user);
         }
-        [HttpPost("refresh-token")]
-        public async Task<ActionResult<string>> RefreshToken()
-        {
-            var refreshToken = Request.Cookies["refreshToken"];
 
-            if (!user.RefreshToken.Equals(refreshToken))
+        [HttpPut, Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateUser([FromBody] AppUser model)
+        {
+            var user = await _userManager.FindByIdAsync(model.Id);
+            if (user == null)
             {
-                return Unauthorized("Invalid Refresh Token.");
-            }
-            else if (user.TokenExpires < DateTime.Now)
-            {
-                return Unauthorized("Token expired.");
+                return NotFound();
             }
 
-            string token = CreateToken(user);
-            var newRefreshToken = GenerateRefreshToken();
-            SetRefreshToken(newRefreshToken);
+            user.UserName = model.Email;
+            user.Email = model.Email;
+            user.FullName = model.FullName;
+            user.PhoneNumber = model.PhoneNumber;
 
-            return Ok(token);
-        }
-        private static RefreshToken GenerateRefreshToken()
-        {
-            var refreshToken = new RefreshToken
+            var result = await _userManager.UpdateAsync(user);
+            if (result.Succeeded)
             {
-                Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
-                Expires = DateTime.Now.AddDays(7),
-                Created = DateTime.Now
-            };
+                return Ok();
+            }
 
-            return refreshToken;
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "Error updating the user.");
         }
-        private void SetRefreshToken(RefreshToken newRefreshToken)
+        //[HttpPost]
+        //[Route("revoke/{username}")]
+        //public async Task<IActionResult> Revoke(string username)
+        //{
+        //    var user = await _userManager.FindByNameAsync(username);
+        //    if (user == null) return BadRequest("Invalid user name");
+
+        //    user.RefreshToken = null;
+        //    await _userManager.UpdateAsync(user);
+
+        //    return NoContent();
+        //}
+
+
+        //[HttpPost]
+        //[Route("revoke-all")]
+        //public async Task<IActionResult> RevokeAll()
+        //{
+        //    var users = _userManager.Users.ToList();
+        //    foreach (var user in users)
+        //    {
+        //        user.RefreshToken = null;
+        //        await _userManager.UpdateAsync(user);
+        //    }
+
+        //    return NoContent();
+        //}
+
+        private JwtSecurityToken CreateToken(List<Claim> authClaims)
         {
-            var cookieOptions = new CookieOptions
-            {
-                HttpOnly = true,
-                Expires = newRefreshToken.Expires
-            };
-            Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
-
-            user.RefreshToken = newRefreshToken.Token;
-            user.TokenCreated = newRefreshToken.Created;
-            user.TokenExpires = newRefreshToken.Expires;
-        }
-        private string CreateToken(User user)
-        {
-            List<Claim> claims = new()
-            {
-                new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, "Admin")
-            };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                _configuration.GetSection("AppSettings:Token").Value));
-
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
+            _ = int.TryParse(_configuration["JWT:TokenValidityInMinutes"], out int tokenValidityInMinutes);
 
             var token = new JwtSecurityToken(
-                claims: claims,
-                expires: DateTime.Now.AddDays(1),
-                signingCredentials: creds);
+                issuer: _configuration["JWT:ValidIssuer"],
+                audience: _configuration["JWT:ValidAudience"],
+                expires: DateTime.Now.AddMinutes(tokenValidityInMinutes),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+                );
 
-            var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+            return token;
+        }
 
-            return jwt;
-        }
-        private static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
+        private static string GenerateRefreshToken()
         {
-            using var hmac = new HMACSHA512();
-            passwordSalt = hmac.Key;
-            passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+            var randomNumber = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
         }
-        private static bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
+
+        private ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
         {
-            using (var hmac = new HMACSHA512(passwordSalt))
+            var tokenValidationParameters = new TokenValidationParameters
             {
-                var computedHash = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
-                return computedHash.SequenceEqual(passwordHash);
-            }
-        }
+                ValidateAudience = false,
+                ValidateIssuer = false,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"])),
+                ValidateLifetime = false
+            };
 
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+            if (securityToken is not JwtSecurityToken jwtSecurityToken || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+                throw new SecurityTokenException("Invalid token");
+
+            return principal;
+
+        }
     }
 }
