@@ -32,6 +32,13 @@ namespace BnDapi.Controllers
             _roleManager = roleManager;
             _configuration = configuration;
         }
+        [HttpGet("Role")]
+        public IActionResult GetAllRoles()
+        {
+            var roles = _roleManager.Roles.ToList();
+
+            return Ok(roles);
+        }
 
         [HttpPost]
         [Route("login")]

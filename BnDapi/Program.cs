@@ -15,6 +15,7 @@ builder.Services.AddDbContext<DataContext>(options => options.UseNpgsql(builder.
 builder.Services.AddIdentity<AppUser, IdentityRole>()
     .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders();
 builder.Services.AddControllers();
+builder.Services.AddScoped<RoleManager<IdentityRole>>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddCors();
