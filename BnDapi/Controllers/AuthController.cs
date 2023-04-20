@@ -177,7 +177,8 @@ namespace BnDapi.Controllers
         public async Task<IActionResult> GetAll(UserPaging paging)
         {
             var users = await _userManager.Users.ToListAsync();
-            users = users.OrderBy(o => o.Id).Skip((paging.pageIndex - 1) * paging.pageSize).Take(paging.pageSize).ToList();
+            var query = users.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.FullName.Contains(paging.KeyWord)));
+            users = query.OrderBy(o => o.Id).Skip((paging.pageIndex - 1) * paging.pageSize).Take(paging.pageSize).ToList();
             return Ok(users);
         }
         [HttpDelete("{id}"), Authorize(Roles = "Admin")]
