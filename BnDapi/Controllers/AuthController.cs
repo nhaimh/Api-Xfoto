@@ -232,32 +232,55 @@ namespace BnDapi.Controllers
         public async Task<IActionResult> GetById(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
+            var userRoles = await _userManager.GetRolesAsync(user); // Lấy danh sách vai trò của người dùng
 
-            return Ok(user);
+            var userObject = new
+            {
+                user.Id,
+                user.Email,
+                user.FullName,
+                user.PhoneNumber,
+                user.UserName,
+                user.EmailConfirmed,
+                user.PhoneNumberConfirmed,
+                user.RefreshTokenExpiryTime,
+                Roles = userRoles
+            };
+            return Ok(userObject);
         }
 
         [HttpPut, Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateUser([FromBody] AppUser model)
+        public async Task<IActionResult> UpdateUser([FromBody] UserUpdateDto dto)
         {
-            var user = await _userManager.FindByIdAsync(model.Id);
+            var user = await _userManager.FindByIdAsync(dto.Id);
             if (user == null)
             {
                 return NotFound();
             }
+            var userRoles = await _userManager.GetRolesAsync(user).ConfigureAwait(false);
 
-            user.UserName = model.Email;
-            user.Email = model.Email;
-            user.FullName = model.FullName;
-            user.PhoneNumber = model.PhoneNumber;
+            user.UserName = dto.Email;
+            user.Email = dto.Email;
+            user.FullName = dto.FullName;
+            user.PhoneNumber = dto.PhoneNumber;
+            user.EmailConfirmed = dto.EmailConfirmed;
+            user.PhoneNumberConfirmed = dto.PhoneNumberConfirmed;
+            //user.
+            //userRoles = model.
+            // Xóa các vai trò cũ của người dùng
+            await _userManager.RemoveFromRolesAsync(user, userRoles);
 
-            var result = await _userManager.UpdateAsync(user);
+            // Thêm vai trò mới cho người dùng
+            await _userManager.AddToRolesAsync(user, dto.Roles);
+
+            var result = await _userManager.UpdateAsync(user); // Cập nhật thông tin mới cho người dùng
+
             if (result.Succeeded)
             {
-                return Ok();
+                return Ok("Update success");
             }
 
-            return StatusCode(StatusCodes.Status500InternalServerError,
-                "Error updating the user.");
+            return BadRequest(result.Errors);
         }
         //[HttpPost]
         //[Route("revoke/{username}")]
