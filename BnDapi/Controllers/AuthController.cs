@@ -98,7 +98,12 @@ namespace BnDapi.Controllers
             var result = await _userManager.CreateAsync(user, model.Password);
             if (!result.Succeeded)
                 return StatusCode(StatusCodes.Status500InternalServerError, new Response { Status = "Error", Message = "User creation failed! Please check user details and try again." });
-
+            if (!await _roleManager.RoleExistsAsync(UserRoles.User))
+                await _roleManager.CreateAsync(new IdentityRole(UserRoles.User));
+            if (await _roleManager.RoleExistsAsync(UserRoles.Admin))
+            {
+                await _userManager.AddToRoleAsync(user, UserRoles.User);
+            }
             return Ok(new Response { Status = "Success", Message = "User created successfully!" });
         }
 
@@ -183,10 +188,27 @@ namespace BnDapi.Controllers
         [HttpPost ,Authorize]
         public async Task<IActionResult> GetAll(UserPaging paging)
         {
-            var users = await _userManager.Users.ToListAsync();
+            var users = await _userManager.Users.ToListAsync(); // Lấy danh sách người dùng
             var query = users.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.FullName.Contains(paging.KeyWord)));
             users = query.OrderBy(o => o.Id).Skip((paging.pageIndex - 1) * paging.pageSize).Take(paging.pageSize).ToList();
-            return Ok(users);
+            var userListWithRoles = new List<object>();
+
+            foreach (var user in users)
+            {
+                var userRoles = await _userManager.GetRolesAsync(user); // Lấy danh sách vai trò của người dùng
+
+                var userObject = new
+                {
+                    user.Id,
+                    user.Email,
+                    user.FullName,
+                    Roles = userRoles
+                };
+
+                userListWithRoles.Add(userObject);
+            }
+
+            return Ok(userListWithRoles);
         }
         [HttpDelete("{id}"), Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(string id)
