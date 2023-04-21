@@ -20,7 +20,7 @@ namespace BnDapi.Controllers
             _context = context;
         }
 
-        [HttpPost("getall")]
+        [HttpPost("getall"),Authorize]
         public async Task<ActionResult<PagingResult<Blog>>> GetAll(BlogPaging paging)
         {
             PagingResult<Blog> result = new();
