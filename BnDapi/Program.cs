@@ -13,7 +13,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<DataContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DbConnect")));
 builder.Services.AddIdentity<AppUser, IdentityRole>()
-    .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders();
+    .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders().AddRoles<IdentityRole>(); 
+builder.Services.AddScoped<RoleManager<IdentityRole>, RoleManager<IdentityRole>>();
+builder.Services.AddScoped<IdentityRole>(s =>
+    new IdentityRole { Name = "Editor" }
+);
 builder.Services.AddControllers();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

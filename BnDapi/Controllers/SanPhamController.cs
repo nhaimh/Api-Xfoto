@@ -43,7 +43,7 @@ namespace BnDapi.Controllers
             return Ok(result);
         }
 
-        [HttpPost("detail"), Authorize(Roles = "Admin")]
+        [HttpPost("detail"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> CreateImage(SanPhamImage sanPhamImage)
         {
             _context.SanPhamImage.Add(sanPhamImage);
@@ -51,7 +51,7 @@ namespace BnDapi.Controllers
 
             return Ok(sanPhamImage);
         }
-        [HttpDelete("detail/id"), Authorize(Roles = "Admin")]
+        [HttpDelete("detail/id"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> DeleteImgae(int id)
         {
             var blog = await _context.SanPhamImage.FindAsync(id);
@@ -59,7 +59,7 @@ namespace BnDapi.Controllers
             await _context.SaveChangesAsync();
             return Ok("Remove success");
         }
-        [HttpPut("detail"), Authorize(Roles = "Admin")]
+        [HttpPut("detail"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> UpdateImage([FromBody] SanPhamImage request)
         {
             var imgae = await _context.SanPhamImage.FindAsync(request.Id);

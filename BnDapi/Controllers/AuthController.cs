@@ -22,7 +22,6 @@ namespace BnDapi.Controllers
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
-
         public AuthenticateController(
             UserManager<AppUser> userManager,
             RoleManager<IdentityRole> roleManager,
@@ -69,19 +68,20 @@ namespace BnDapi.Controllers
                 user.RefreshTokenExpiryTime = DateTime.Now.AddDays(refreshTokenValidityInDays);
 
                 await _userManager.UpdateAsync(user);
-
+                
                 return Ok(new
                 {
                     Token = new JwtSecurityTokenHandler().WriteToken(token),
                     RefreshToken = refreshToken,
-                    Expiration = token.ValidTo
+                    Expiration = token.ValidTo,
+                    Roles = userRoles
                 });
             }
             return Unauthorized();
         }
 
         [HttpPost]
-        [Route("SignUp") ,Authorize(Roles = "User")]
+        [Route("SignUp") ,Authorize]
         public async Task<IActionResult> Register([FromBody] SignUpModel model)
         {
             var userExists = await _userManager.FindByNameAsync(model.Email);
@@ -108,7 +108,7 @@ namespace BnDapi.Controllers
         }
 
         [HttpPost]
-        [Route("SignUp-admin"), Authorize(Roles = "Admin")]
+        [Route("SignUp-admin"), Authorize]
         public async Task<IActionResult> RegisterAdmin([FromBody] SignUpModel model)
         {
             var userExists = await _userManager.FindByNameAsync(model.Email);
@@ -210,7 +210,7 @@ namespace BnDapi.Controllers
 
             return Ok(userListWithRoles);
         }
-        [HttpDelete("{id}"), Authorize(Roles = "Admin")]
+        [HttpDelete("{id}"), Authorize]
         public async Task<IActionResult> Delete(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
@@ -249,7 +249,7 @@ namespace BnDapi.Controllers
             return Ok(userObject);
         }
 
-        [HttpPut, Authorize(Roles = "Admin")]
+        [HttpPut, Authorize]
         public async Task<IActionResult> UpdateUser([FromBody] UserUpdateDto dto)
         {
             var user = await _userManager.FindByIdAsync(dto.Id);
@@ -281,6 +281,12 @@ namespace BnDapi.Controllers
             }
 
             return BadRequest(result.Errors);
+        }
+        [HttpGet]
+         public async Task<object> CallUser()
+        {
+            var user= await _userManager.GetUserAsync(HttpContext.User);
+            return Ok(user);
         }
         //[HttpPost]
         //[Route("revoke/{username}")]

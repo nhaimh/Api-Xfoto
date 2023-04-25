@@ -48,14 +48,14 @@ namespace BnDapi.Controllers
             return blog;
         }
 
-        [HttpPost("DuAnImage"), Authorize(Roles = "Admin")]
+        [HttpPost("DuAnImage"), Authorize]
         public async Task<ActionResult<List<DuAnImgae>>> CreateImage(DuAnImgae duAnImgae)
         {
             _context.DuAnImgae.Add(duAnImgae);
             await _context.SaveChangesAsync();
             return Ok(duAnImgae);
         }
-        [HttpDelete("DuAnImage/id"), Authorize(Roles = "Admin")]
+        [HttpDelete("DuAnImage/id"), Authorize]
         public async Task<ActionResult<List<DuAnImgae>>> DeleteImgae(int id)
         {
             var blog = await _context.DuAnImgae.FindAsync(id);
@@ -63,7 +63,7 @@ namespace BnDapi.Controllers
             await _context.SaveChangesAsync();
             return Ok("Remove success");
         }
-        [HttpPut("DuAnImage"), Authorize(Roles = "Admin")]
+        [HttpPut("DuAnImage"), Authorize]
         public async Task<ActionResult<List<DuAnImgae>>> UpdateImage([FromBody] DuAnImgae request)
         {
             var imgae = await _context.DuAnImgae.FindAsync(request.Id);

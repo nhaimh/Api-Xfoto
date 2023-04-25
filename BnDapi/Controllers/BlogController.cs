@@ -35,7 +35,7 @@ namespace BnDapi.Controllers
             var blo = await _context.Blog.Where(c => c.Id == id).SingleAsync();
             return blo;
         }
-        [HttpPost(), Authorize(Roles = "Admin")]
+        [HttpPost(), Authorize]
         public async Task<ActionResult<List<Blog>>> CreateBlog(Blog blog)
         {
             _context.Blog.Add(blog);
@@ -44,7 +44,7 @@ namespace BnDapi.Controllers
 
             return Ok(blog);
         }
-        [HttpDelete("id"), Authorize(Roles = "Admin")]
+        [HttpDelete("id"), Authorize]
         public async Task<ActionResult<List<Blog>>> DeleteBlog(int id)
         {
             var blog = await _context.Blog.FindAsync(id);
@@ -52,7 +52,7 @@ namespace BnDapi.Controllers
             await _context.SaveChangesAsync();
             return Ok("Remove success");
         }
-        [HttpPut, Authorize(Roles = "Admin")]
+        [HttpPut, Authorize]
         public async Task<ActionResult<List<Blog>>> UpdateBlog([FromBody] Blog request)
         {
             var blog = await _context.Blog.FindAsync(request.Id);
