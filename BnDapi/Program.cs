@@ -1,4 +1,7 @@
 using BnDapi.Data;
+using BnDapi.Services.BlogBLL;
+using BnDapi.Services.DuAnBLL;
+using BnDapi.Services.SanPhamBLL;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,11 +16,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<DataContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("DbConnect")));
 builder.Services.AddIdentity<AppUser, IdentityRole>()
-    .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders().AddRoles<IdentityRole>(); 
+    .AddEntityFrameworkStores<DataContext>().AddDefaultTokenProviders().AddRoles<IdentityRole>();
 builder.Services.AddScoped<RoleManager<IdentityRole>, RoleManager<IdentityRole>>();
 builder.Services.AddScoped<IdentityRole>(s =>
     new IdentityRole { Name = "Editor" }
 );
+builder.Services.AddScoped<IBlogBLL, BlogBLL>();
+builder.Services.AddScoped<IDuAnBLL, DuAnBLL>();
+builder.Services.AddScoped<ISanPhamBLL, SanPhamBLL>();
 builder.Services.AddControllers();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -37,11 +43,13 @@ builder.Services.AddSwaggerGen(options =>
 
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
-builder.Services.AddAuthentication(options => {
+builder.Services.AddAuthentication(options =>
+{
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(options => {
+}).AddJwtBearer(options =>
+{
     options.SaveToken = true;
     options.RequireHttpsMetadata = false;
     options.TokenValidationParameters = new TokenValidationParameters

@@ -81,7 +81,7 @@ namespace BnDapi.Controllers
         }
 
         [HttpPost]
-        [Route("SignUp") ,Authorize]
+        [Route("SignUp") ]
         public async Task<IActionResult> Register([FromBody] SignUpModel model)
         {
             var userExists = await _userManager.FindByNameAsync(model.Email);
@@ -202,7 +202,6 @@ namespace BnDapi.Controllers
                     user.Id,
                     user.Email,
                     user.FullName,
-                    Roles = userRoles
                 };
 
                 userListWithRoles.Add(userObject);

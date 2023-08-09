@@ -1,6 +1,8 @@
 ﻿using BnDapi.Data;
 using BnDapi.Dto;
 using BnDapi.Models;
+using BnDapi.Services.DuAnBLL;
+using BnDapi.Services.SanPhamBLL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,65 +14,80 @@ namespace BnDapi.Controllers
     [ApiController]
     public class SanPhamController : ControllerBase
     {
-        private readonly DataContext _context;
-        public SanPhamController(DataContext context)
+        private readonly ISanPhamBLL _sanPhamBLL;
+        public SanPhamController(ISanPhamBLL sanPhamBLL)
         {
-            _context = context;
+            _sanPhamBLL = sanPhamBLL;
         }
         [HttpGet]
         public async Task<ActionResult<List<SanPham>>> GetAll()
         {
-            var sanphams = await _context.SanPham
-                .Include(c => c.SanPhamImages)
-                .ToListAsync();
-            return sanphams;
+            var result = await _sanPhamBLL.GetAll();
+            if (result == null)
+            {
+                return NotFound();
+            }
+            return Ok(result);
         }
         [HttpGet("detail/id")]
         public async Task<ActionResult<SanPhamImage>> GetById(int id)
         {
-            var sanpham = await _context.SanPhamImage
-                .Where(c => c.Id == id)
-                .SingleAsync();
-            return sanpham;
+            var result = await _sanPhamBLL.GetById(id);
+            if (result == null)
+            {
+                return NotFound();
+            }
+            return Ok(result);
         }
         [HttpPost("detail/getall")]
         public async Task<ActionResult<PagingResult<SanPhamImage>>> GetSPdetail(SanPhamPaging paging)
         {
-            PagingResult<SanPhamImage> result = new();
-            var query = _context.SanPhamImage.Where(x => (string.IsNullOrEmpty(paging.KeyWord) || x.Description.Contains(paging.KeyWord))); // Query ra những row phù hợp điều kiện
-            result.TotalRows = query.Count(); // Đếm tổng row phù hợp
-            result.Data = query.Skip(paging.pageSize * (paging.pageIndex - 1)).Take(paging.pageSize).ToList(); // Lấy row theo paging
+            var result = await _sanPhamBLL.GetSPdetail(paging);
+            if (result == null)
+            {
+                return NotFound();
+            }
             return Ok(result);
         }
 
         [HttpPost("detail"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> CreateImage(SanPhamImage sanPhamImage)
         {
-            _context.SanPhamImage.Add(sanPhamImage);
-            await _context.SaveChangesAsync();
-
-            return Ok(sanPhamImage);
+            try
+            {
+                await _sanPhamBLL.CreateImage(sanPhamImage);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
         }
         [HttpDelete("detail/id"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> DeleteImgae(int id)
         {
-            var blog = await _context.SanPhamImage.FindAsync(id);
-            _context.SanPhamImage.Remove(blog);
-            await _context.SaveChangesAsync();
-            return Ok("Remove success");
+            try
+            {
+                await _sanPhamBLL.DeleteImgae(id);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
         }
         [HttpPut("detail"), Authorize]
         public async Task<ActionResult<List<SanPhamImage>>> UpdateImage([FromBody] SanPhamImage request)
         {
-            var imgae = await _context.SanPhamImage.FindAsync(request.Id);
-            imgae.Description = request.Description;
-            imgae.ImageA = request.ImageA;
-            imgae.ImageB = request.ImageB;
-            imgae.SanPhamId = request.SanPhamId;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(imgae);
+            try
+            {
+                await _sanPhamBLL.UpdateImage(request);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
         }
 
     }
